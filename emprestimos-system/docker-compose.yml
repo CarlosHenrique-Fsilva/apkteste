@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: emprestimos-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: emprestimos
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mudar123}
+      POSTGRES_DB: emprestimos_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emprestimos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: emprestimos-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://emprestimos:${DB_PASSWORD:-mudar123}@postgres:5432/emprestimos_db
+      JWT_SECRET: ${JWT_SECRET:-seu-segreto-jwt-mude-em-producao}
+      JWT_EXPIRES_IN: 15m
+      FRONTEND_URL: http://localhost:3000
+      STORAGE_PATH: /app/storage
+    volumes:
+      - ./backend/src:/app/src
+      - storage_data:/app/storage
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npm run prisma:migrate:prod && npm run start:dev"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: emprestimos-frontend
+    restart: unless-stopped
+    environment:
+      REACT_APP_API_URL: http://localhost:3001/api
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    command: npm start
+
+  nginx:
+    image: nginx:alpine
+    container_name: emprestimos-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
+  storage_data:
