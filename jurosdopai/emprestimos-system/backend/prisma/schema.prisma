@@ -1,0 +1,443 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ClientAdministrativeStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  ARCHIVED
+}
+
+enum LoanModality {
+  PERIODIC_INTEREST
+  INSTALLMENT_LOAN
+}
+
+enum InterestCalculationMethod {
+  PERCENTAGE
+  FIXED_VALUE
+  MANUAL
+}
+
+enum LoanCalculationMethod {
+  SIMPLE_INTEREST_ON_INITIAL
+  SIMPLE_INTEREST_ON_BALANCE
+  PRICE_TABLE
+}
+
+enum PaymentFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+enum LoanStatus {
+  ACTIVE
+  PAID_OFF
+  OVERDUE
+  RESTRUCTURED
+  CANCELLED
+}
+
+enum ReceivableSourceType {
+  INTEREST_CHARGE
+  INSTALLMENT
+  LATE_FEE
+  MANUAL_ADJUSTMENT
+}
+
+enum ReceivableStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  BANK_TRANSFER
+  CARD
+  CHECK
+  OTHER
+}
+
+enum PaymentStatus {
+  CONFIRMED
+  PENDING_CONFIRMATION
+  REVERSED
+  PARTIAL
+}
+
+enum DocumentType {
+  CONTRACT
+  RECEIPT
+  SETTLEMENT_TERM
+  REPORT
+  ATTACHMENT
+}
+
+enum NotificationType {
+  DUE_SOON
+  OVERDUE
+  PAYMENT_CONFIRMED
+  PAYMENT_RECEIVED
+  CONTRACT_CREATED
+  LOAN_PAID_OFF
+  CUSTOM
+}
+
+enum NotificationStatus {
+  SCHEDULED
+  SENT
+  READ
+  FAILED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  CONFIRM_PAYMENT
+  REVERSE_PAYMENT
+  GENERATE_DOCUMENT
+  LOGIN
+  LOGOUT
+}
+
+model User {
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  status       UserStatus   @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  clients           Client[]
+  loans             Loan[]
+  receivables       Receivable[]
+  payments          Payment[]
+  documents         Document[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]    @relation("ActorAuditLogs")
+  ownedAuditLogs    AuditLog[]    @relation("OwnerAuditLogs")
+
+  @@map("users")
+}
+
+model Client {
+  id                     String                   @id @default(uuid())
+  ownerUserId            String
+  fullName               String
+  whatsapp               String?
+  notes                  String?
+  administrativeStatus   ClientAdministrativeStatus @default(ACTIVE)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  archivedAt             DateTime?
+
+  ownerUser              User         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  loans                  Loan[]
+  receivables            Receivable[]
+  payments               Payment[]
+  documents              Document[]
+  notifications          Notification[]
+
+  @@index([ownerUserId])
+  @@index([administrativeStatus])
+  @@map("clients")
+}
+
+model Loan {
+  id                   String                 @id @default(uuid())
+  ownerUserId          String
+  clientId             String
+  modality             LoanModality
+  principalAmount      Decimal                @db.Decimal(15, 2)
+  outstandingPrincipal Decimal                @db.Decimal(15, 2)
+  interestRate         Decimal                @db.Decimal(5, 4)
+  calculationMethod    LoanCalculationMethod
+  paymentFrequency     PaymentFrequency
+  startDate            DateTime
+  firstDueDate         DateTime
+  status               LoanStatus             @default(ACTIVE)
+  notes                String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  ownerUser            User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  client               Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  terms                LoanTerm[]
+  interestCharges      InterestCharge[]
+  installments         Installment[]
+  receivables          Receivable[]
+  payments             Payment[]
+  documents            Document[]
+
+  @@index([ownerUserId])
+  @@index([clientId])
+  @@index([status])
+  @@map("loans")
+}
+
+model LoanTerm {
+  id                String                @id @default(uuid())
+  loanId            String
+  principalAmount   Decimal               @db.Decimal(15, 2)
+  interestRate      Decimal               @db.Decimal(5, 4)
+  calculationMethod LoanCalculationMethod
+  termCount         Int
+  termsSnapshot     Json
+  createdAt         DateTime              @default(now())
+
+  loan              Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+  @@map("loan_terms")
+}
+
+model InterestCharge {
+  id                String                    @id @default(uuid())
+  loanId            String
+  amountDue         Decimal                   @db.Decimal(15, 2)
+  manuallyDefined   Boolean                   @default(false)
+  referencePeriod   DateTime
+  dueDate           DateTime
+  status            ReceivableStatus          @default(PENDING)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  loan              Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("interest_charges")
+}
+
+model Installment {
+  id                  String            @id @default(uuid())
+  loanId              String
+  installmentNumber   Int
+  principalComponent  Decimal           @db.Decimal(15, 2)
+  interestComponent   Decimal           @db.Decimal(15, 2)
+  totalAmount         Decimal           @db.Decimal(15, 2)
+  amountReceived      Decimal           @db.Decimal(15, 2) @default(0)
+  dueDate             DateTime
+  status              ReceivableStatus  @default(PENDING)
+
+  loan                Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@unique([loanId, installmentNumber])
+  @@index([loanId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("installments")
+}
+
+model Receivable {
+  id                  String                @id @default(uuid())
+  ownerUserId         String
+  loanId              String
+  clientId            String
+  sourceType          ReceivableSourceType
+  sourceId            String
+  originalAmount      Decimal               @db.Decimal(15, 2)
+  amountReceived      Decimal               @db.Decimal(15, 2) @default(0)
+  outstandingAmount   Decimal               @db.Decimal(15, 2)
+  dueDate             DateTime
+  status              ReceivableStatus      @default(PENDING)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  ownerUser           User              @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  loan                Loan              @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  client              Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  payments            PaymentAllocation[]
+  dueDateChanges      DueDateChange[]
+  lateFees            LateFee[]
+
+  @@index([ownerUserId])
+  @@index([loanId])
+  @@index([clientId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("receivables")
+}
+
+model Payment {
+  id              String          @id @default(uuid())
+  ownerUserId     String
+  clientId        String
+  loanId          String?
+  amount          Decimal         @db.Decimal(15, 2)
+  paymentMethod   PaymentMethod
+  receivedAt      DateTime
+  recordedAt      DateTime        @default(now())
+  confirmedBy     String
+  notes           String?
+  status          PaymentStatus   @default(CONFIRMED)
+
+  ownerUser       User                @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  client          Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  loan            Loan?               @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  allocations     PaymentAllocation[]
+  receipts        Receipt[]
+  documents       Document[]
+
+  @@index([ownerUserId])
+  @@index([clientId])
+  @@index([loanId])
+  @@index([receivedAt])
+  @@index([status])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id               String            @id @default(uuid())
+  paymentId        String
+  receivableId     String
+  allocatedAmount  Decimal           @db.Decimal(15, 2)
+  allocationType   String
+  createdAt        DateTime          @default(now())
+
+  payment          Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  receivable       Receivable    @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([receivableId])
+  @@map("payment_allocations")
+}
+
+model Receipt {
+  id             String      @id @default(uuid())
+  paymentId      String      @unique
+  receiptCode    String      @unique
+  storagePath    String
+  generatedAt    DateTime    @default(now())
+
+  payment        Payment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([receiptCode])
+  @@map("receipts")
+}
+
+model Document {
+  id            String        @id @default(uuid())
+  ownerUserId   String
+  clientId      String?
+  loanId        String?
+  paymentId     String?
+  documentType  DocumentType
+  fileName      String
+  storagePath   String
+  mimeType      String
+  fileSize      Int
+  generatedAt   DateTime      @default(now())
+
+  ownerUser     User      @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  client        Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  loan          Loan?     @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  payment       Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId])
+  @@index([clientId])
+  @@index([loanId])
+  @@index([paymentId])
+  @@index([documentType])
+  @@map("documents")
+}
+
+model DueDateChange {
+  id               String      @id @default(uuid())
+  receivableId     String
+  previousDueDate  DateTime
+  newDueDate       DateTime
+  reason           String
+  changedBy        String
+  changedAt        DateTime    @default(now())
+
+  receivable       Receivable  @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+
+  @@index([receivableId])
+  @@map("due_date_changes")
+}
+
+model LateFee {
+  id                  String            @id @default(uuid())
+  receivableId        String
+  feeType             String
+  calculationMethod   String
+  amount              Decimal           @db.Decimal(15, 2)
+  referenceDate       DateTime
+  status              ReceivableStatus  @default(PENDING)
+  createdAt           DateTime          @default(now())
+
+  receivable          Receivable        @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+
+  @@index([receivableId])
+  @@map("late_fees")
+}
+
+model Notification {
+  id              String            @id @default(uuid())
+  ownerUserId     String
+  clientId        String?
+  notificationType NotificationType
+  title           String
+  message         String
+  scheduledAt     DateTime
+  sentAt          DateTime?
+  readAt          DateTime?
+  status          NotificationStatus @default(SCHEDULED)
+  createdAt       DateTime          @default(now())
+
+  ownerUser       User      @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  client          Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId])
+  @@index([clientId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id            String      @id @default(uuid())
+  ownerUserId   String
+  actorUserId   String
+  entityType    String
+  entityId      String
+  action        AuditAction
+  oldValues     Json?
+  newValues     Json?
+  reason        String?
+  createdAt     DateTime    @default(now())
+
+  ownerUser     User        @relation("OwnerAuditLogs", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  actorUser     User        @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

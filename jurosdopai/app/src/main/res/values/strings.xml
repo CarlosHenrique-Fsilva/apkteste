@@ -1,0 +1,55 @@
+<resources>
+    <string name="app_name">Juros do Pai</string>
+    <string name="app_name_short">Juros</string>
+
+    <!-- Main Screen -->
+    <string name="title_main">Meus Juros</string>
+    <string name="fab_add">Adicionar</string>
+    <string name="menu_filter">Filtrar</string>
+    <string name="menu_export">Exportar CSV</string>
+    <string name="menu_stats">Estatísticas</string>
+    <string name="empty_state">Nenhum registro ainda\nToque em + para adicionar</string>
+    <string name="empty_state_filtered">Nenhum resultado para este filtro</string>
+
+    <!-- Add/Edit Screen -->
+    <string name="title_add">Novo Registro</string>
+    <string name="title_edit">Editar Registro</string>
+    <string name="hint_valor">Valor do juro (%)</string>
+    <string name="hint_data">Data</string>
+    <string name="hint_categoria">Categoria</string>
+    <string name="hint_descricao">Descrição (opcional)</string>
+    <string name="btn_save">Salvar</string>
+    <string name="btn_cancel">Cancelar</string>
+
+    <!-- Categories -->
+    <string name="cat_emprestimo">Empréstimo</string>
+    <string name="cat_investimento">Investimento</string>
+    <string name="cat_pessoal">Pessoal</string>
+    <string name="cat_outro">Outro</string>
+
+    <!-- Stats -->
+    <string name="stats_title">Estatísticas</string>
+    <string name="stats_total_registros">Total de Registros</string>
+    <string name="stats_media">Média</string>
+    <string name="stats_soma">Soma Total</string>
+    <string name="stats_min">Menor Valor</string>
+    <string name="stats_max">Maior Valor</string>
+    <string name="stats_por_categoria">Por Categoria</string>
+    <string name="stats_mensal">Média Mensal (12m)</string>
+
+    <!-- Export -->
+    <string name="export_success">CSV exportado para Downloads</string>
+    <string name="export_error">Erro ao exportar</string>
+    <string name="permission_storage_needed">Precisa de permissão para salvar arquivo</string>
+
+    <!-- Dialogs -->
+    <string name="confirm_delete">Excluir este registro?</string>
+    <string name="confirm_delete_msg">Esta ação não pode ser desfeita.</string>
+    <string name="btn_delete">Excluir</string>
+    <string name="btn_keep">Manter</string>
+
+    <!-- Formatting -->
+    <string name="format_percent">%.2f%%</string>
+    <string name="format_date">dd/MM/yyyy</string>
+    <string name="format_currency">R$ %.2f</string>
+</resources>
